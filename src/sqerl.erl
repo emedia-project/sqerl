@@ -308,8 +308,35 @@ extra_clause({order_by, ColNames}, Safe) ->
                                 expr(Name, Safe)
                          end)].
 
+window_clause(Expr, true) when is_binary(Expr) ->
+    throw({error, {unsafe_expression, Expr}});
+window_clause(Expr, false) when is_binary(Expr) -> [Expr];
+window_clause([Expr], false) when is_binary(Expr) -> [Expr];
+window_clause(Exprs, Safe) when is_list(Exprs)->
+    case is_tuple(hd(Exprs)) of
+        true ->
+            window_clause2(Exprs, false);
+        false ->
+            if not Safe ->
+                [list_to_binary(Exprs)];
+            true ->
+                throw({error, {unsafe_expression, Exprs}})
+            end
+    end;
+
+window_clause({partition_by, ColNames}, Safe) ->
+    [<<"PARTITION BY ">>, make_list(ColNames, fun(Col) -> expr2(Col, Safe) end)];
+window_clause({order_by, _ColNames} = OrderBy, Safe) ->
+    [extra_clause(OrderBy, Safe)].
+
 extra_clause2(Exprs, Safe) ->
-    Res = [extra_clause(Expr,Safe) || Expr <- Exprs, Expr =/= undefined],
+    generic_clause2(Exprs, Safe, fun extra_clause/2).
+
+window_clause2(Exprs, Safe) ->
+    generic_clause2(Exprs, Safe, fun window_clause/2).
+
+generic_clause2(Exprs, Safe, Fun) ->
+    Res = [Fun(Expr,Safe) || Expr <- Exprs, Expr =/= undefined],
     [intersperse($\s, Res)].
 
 insert(Table, Params) when is_list(Params) ->
@@ -398,6 +425,17 @@ expr({call, FuncName, []}, _Safe) ->
     [convert(FuncName), <<"()">>];
 expr({call, FuncName, Params}, _Safe) ->
     [convert(FuncName), $(, make_list(Params, fun param/1), $)];
+expr({over, Left, Right}, Safe) ->
+    expr({over, Left, undefined, Right}, Safe);
+expr({over, Left, Cond, Right}, Safe) ->
+    Window = [$(, window_clause(Right, Safe), $)],
+    case Cond of
+        undefined ->
+            [expr2(Left, Safe), <<" OVER ">>, Window];
+        _ ->
+            Where = where(Cond, Safe),
+            [expr2(Left, Safe), <<" FILTER ">>, $(, Where, $), <<" OVER ">>, Window]
+    end;
 expr({Val, Op, {select, _} = Subquery}, Safe) ->
     subquery(Val, Op, Subquery, Safe);
 expr({Val, Op, {select, _, _} = Subquery}, Safe) ->
