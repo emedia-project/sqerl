@@ -289,8 +289,6 @@ extra_clause(Exprs, Safe) when is_list(Exprs) ->
                 throw({error, {unsafe_expression, Exprs}})
             end
     end;
-extra_clause(Exprs, true) when is_list(Exprs) ->
-    extra_clause2(Exprs, true);
 extra_clause({limit, Num}, _Safe) ->
     [<<"LIMIT ">>, encode(Num)];
 extra_clause({limit, Offset, Num}, _Safe) ->
