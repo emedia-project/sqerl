@@ -336,6 +336,10 @@ unsafe_test_() ->
 
             {<<"SELECT NOT (foo = bar)">>,
                 ?_unsafe_test({select,{'!',"foo = bar"}})
+            },
+
+            {<<"SELECT foo FROM (SELECT foo FROM bar) AS baz">>,
+             ?_unsafe_test({select, [foo], {from, {{select, [foo], {from, bar}}, as, baz}}})
             }
         ]
     }.
