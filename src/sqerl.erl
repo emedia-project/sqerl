@@ -137,7 +137,7 @@ sql2({select, Modifier, Fields, {from, Tables}, WhereExpr, Extras}, Safe) ->
 sql2({Select1, union, Select2}, Safe) ->
     [$(, sql2(Select1, Safe), <<") UNION (">>, sql2(Select2, Safe), $)];
 sql2({Select1, union, Select2, {where, WhereExpr}}, Safe) ->
-    [sql2({Select1, union, Select2}, Safe), where(WhereExpr, Safe)];
+    [sql2({Select1, union, Select2}, Safe), $\s, where(WhereExpr, Safe)];
 sql2({Select1, union, Select2, Extras}, Safe) ->
     [sql2({Select1, union, Select2}, Safe), $\s, extra_clause(Extras, Safe)];
 sql2({Select1, union, Select2, {where, _} = Where, Extras}, Safe) ->
@@ -146,7 +146,7 @@ sql2({Select1, union, Select2, {where, _} = Where, Extras}, Safe) ->
 sql2({Select1, union_all, Select2}, Safe) ->
     [$(, sql2(Select1, Safe), <<") UNION ALL (">>, sql2(Select2, Safe), $)];
 sql2({Select1, union_all, Select2, {where, WhereExpr}}, Safe) ->
-    [sql2({Select1, union, Select2}, Safe), where(WhereExpr, Safe)];
+    [sql2({Select1, union, Select2}, Safe), $\s, where(WhereExpr, Safe)];
 sql2({Select1, union_all, Select2, Extras}, Safe) ->
     [sql2({Select1, union, Select2}, Safe), extra_clause(Extras, Safe)];
 sql2({Select1, union_all, Select2, {where, _} = Where, Extras}, Safe) ->
@@ -211,10 +211,7 @@ select(Modifier, Fields, Tables, WhereExpr, Extras, Safe) ->
                    make_list(Tables, fun(Val) -> join(Val, Safe) end)]
     end,
 
-    S5 = case where(WhereExpr, Safe) of
-        undefined -> S4;
-        WhereClause -> [S4, WhereClause]
-    end,
+    S5 = add_optional_where(S4, WhereExpr, Safe),
 
     case extra_clause(Extras, Safe) of
         undefined -> S5;
@@ -260,21 +257,20 @@ where(undefined, _) -> [];
 where(Expr, true) when is_list(Expr); is_binary(Expr) ->
     throw({error, {unsafe_expression, Expr}});
 where(Expr, false) when is_binary(Expr) ->
-    Res = case Expr of
+    case Expr of
         <<"WHERE ", _Rest/binary>> = Expr1 ->
             Expr1;
         <<"where ", Rest/binary>> ->
             <<"WHERE ", Rest/binary>>;
         Expr1 ->
             <<"WHERE ", Expr1/binary>>
-    end,
-    [$\s, Res];
+    end;
 where(Exprs, false) when is_list(Exprs)->
     where(list_to_binary(Exprs), false);
 where(Expr, Safe) when is_tuple(Expr) ->
     case expr(Expr, Safe) of
         undefined -> [];
-        Other -> [<<" WHERE ">>, Other]
+        Other -> [<<"WHERE ">>, Other]
     end.
 
 extra_clause(undefined, _Safe) -> undefined;
@@ -358,7 +354,8 @@ update(Table, Props, Where, Safe) ->
     S2 = make_list(Props, fun({Field, Val}) ->
         [convert(Field), <<" = ">>, expr(Val, Safe)]
     end),
-    [<<"UPDATE ">>, S1, <<" SET ">>, S2, where(Where, Safe)].
+    S3 = [<<"UPDATE ">>, S1, <<" SET ">>, S2],
+    add_optional_where(S3, Where, Safe).
 
 delete(Table, Safe) ->
     delete(Table, undefined, undefined, undefined, Safe).
@@ -377,10 +374,7 @@ delete(Table, Using, WhereExpr, Extras, Safe) ->
     S3 = if Using =:= undefined -> S2;
         true -> [S2, <<" USING ">>, make_list(Using, fun convert/1)]
     end,
-    S4 = case where(WhereExpr, Safe) of
-        undefined -> S3;
-        WhereClause -> [S3, WhereClause]
-    end,
+    S4 = add_optional_where(S3, WhereExpr, Safe),
     if Extras =:= undefined ->
         S4;
     true ->
@@ -508,6 +502,14 @@ quote([$\^Z | Rest], Acc) ->
     quote(Rest, [$Z, $\\ | Acc]);
 quote([C | Rest], Acc) ->
     quote(Rest, [C | Acc]).
+
+add_optional_where(Pre, WhereExpr, Safe) ->
+    case where(WhereExpr, Safe) of
+        undefined -> Pre;
+        "" -> Pre;
+        <<"">> -> Pre;
+        WhereClause -> [Pre, $\s, WhereClause]
+    end.
 
 intersperse(_, []) ->
   [];
