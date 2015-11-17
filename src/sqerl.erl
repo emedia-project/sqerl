@@ -137,16 +137,16 @@ sql2({select, Modifier, Fields, {from, Tables}, WhereExpr, Extras}, Safe) ->
 sql2({Select1, union, Select2}, Safe) ->
     [$(, sql2(Select1, Safe), <<") UNION (">>, sql2(Select2, Safe), $)];
 sql2({Select1, union, Select2, {where, WhereExpr}}, Safe) ->
-    [sql2({Select1, union, Select2}, Safe), where(WhereExpr, Safe)];
+    [sql2({Select1, union, Select2}, Safe), $\s, where(WhereExpr, Safe)];
 sql2({Select1, union, Select2, Extras}, Safe) ->
-    [sql2({Select1, union, Select2}, Safe), extra_clause(Extras, Safe)];
+    [sql2({Select1, union, Select2}, Safe), $\s, extra_clause(Extras, Safe)];
 sql2({Select1, union, Select2, {where, _} = Where, Extras}, Safe) ->
-    [sql2({Select1, union, Select2, Where}, Safe), extra_clause(Extras, Safe)];
+    [sql2({Select1, union, Select2, Where}, Safe), $\s, extra_clause(Extras, Safe)];
 
 sql2({Select1, union_all, Select2}, Safe) ->
     [$(, sql2(Select1, Safe), <<") UNION ALL (">>, sql2(Select2, Safe), $)];
 sql2({Select1, union_all, Select2, {where, WhereExpr}}, Safe) ->
-    [sql2({Select1, union, Select2}, Safe), where(WhereExpr, Safe)];
+    [sql2({Select1, union, Select2}, Safe), $\s, where(WhereExpr, Safe)];
 sql2({Select1, union_all, Select2, Extras}, Safe) ->
     [sql2({Select1, union, Select2}, Safe), extra_clause(Extras, Safe)];
 sql2({Select1, union_all, Select2, {where, _} = Where, Extras}, Safe) ->
@@ -211,14 +211,11 @@ select(Modifier, Fields, Tables, WhereExpr, Extras, Safe) ->
                    make_list(Tables, fun(Val) -> join(Val, Safe) end)]
     end,
 
-    S5 = case where(WhereExpr, Safe) of
-        undefined -> S4;
-        WhereClause -> [S4, WhereClause]
-    end,
+    S5 = add_optional_where(S4, WhereExpr, Safe),
 
     case extra_clause(Extras, Safe) of
         undefined -> S5;
-        Expr -> [S5, Expr]
+        Expr -> [S5, $\s, Expr]
     end.
 
 join({Table, Join, Table2, JoinExpr}, Safe) ->
@@ -260,52 +257,49 @@ where(undefined, _) -> [];
 where(Expr, true) when is_list(Expr); is_binary(Expr) ->
     throw({error, {unsafe_expression, Expr}});
 where(Expr, false) when is_binary(Expr) ->
-    Res = case Expr of
+    case Expr of
         <<"WHERE ", _Rest/binary>> = Expr1 ->
             Expr1;
         <<"where ", Rest/binary>> ->
             <<"WHERE ", Rest/binary>>;
         Expr1 ->
             <<"WHERE ", Expr1/binary>>
-    end,
-    [$\s, Res];
+    end;
 where(Exprs, false) when is_list(Exprs)->
     where(list_to_binary(Exprs), false);
 where(Expr, Safe) when is_tuple(Expr) ->
     case expr(Expr, Safe) of
         undefined -> [];
-        Other -> [<<" WHERE ">>, Other]
+        Other -> [<<"WHERE ">>, Other]
     end.
 
 extra_clause(undefined, _Safe) -> undefined;
 extra_clause(Expr, true) when is_binary(Expr) ->
     throw({error, {unsafe_expression, Expr}});
-extra_clause(Expr, false) when is_binary(Expr) -> [$\s, Expr];
-extra_clause([Expr], false) when is_binary(Expr) -> [$\s, Expr];
+extra_clause(Expr, false) when is_binary(Expr) -> [Expr];
+extra_clause([Expr], false) when is_binary(Expr) -> [Expr];
 extra_clause(Exprs, Safe) when is_list(Exprs) ->
     case is_tuple(hd(Exprs)) of
         true ->
             extra_clause2(Exprs, false);
         false ->
             if not Safe ->
-                [$\s, list_to_binary(Exprs)];
+                [list_to_binary(Exprs)];
             true ->
                 throw({error, {unsafe_expression, Exprs}})
             end
     end;
-extra_clause(Exprs, true) when is_list(Exprs) ->
-    extra_clause2(Exprs, true);
 extra_clause({limit, Num}, _Safe) ->
-    [<<" LIMIT ">>, encode(Num)];
+    [<<"LIMIT ">>, encode(Num)];
 extra_clause({limit, Offset, Num}, _Safe) ->
-    [<<" LIMIT ">>, encode(Offset), <<", ">> , encode(Num)];
+    [<<"LIMIT ">>, encode(Offset), <<", ">> , encode(Num)];
 extra_clause({group_by, ColNames}, _Safe) ->
-    [<<" GROUP BY ">>, make_list(ColNames, fun convert/1)];
+    [<<"GROUP BY ">>, make_list(ColNames, fun convert/1)];
 extra_clause({group_by, ColNames, having, Expr}, Safe) ->
     [extra_clause({group_by, ColNames}, Safe), <<" HAVING ">>,
      expr(Expr, Safe)];
 extra_clause({order_by, ColNames}, Safe) ->
-    [<<" ORDER BY ">>,
+    [<<"ORDER BY ">>,
      make_list(ColNames, fun({Name, Modifier}) when Modifier =:= 'asc' ->
                                 [expr(Name, Safe), $\s, convert('ASC')];
                             ({Name, Modifier}) when Modifier =:= 'desc' ->
@@ -314,9 +308,36 @@ extra_clause({order_by, ColNames}, Safe) ->
                                 expr(Name, Safe)
                          end)].
 
+window_clause(Expr, true) when is_binary(Expr) ->
+    throw({error, {unsafe_expression, Expr}});
+window_clause(Expr, false) when is_binary(Expr) -> [Expr];
+window_clause([Expr], false) when is_binary(Expr) -> [Expr];
+window_clause(Exprs, Safe) when is_list(Exprs)->
+    case is_tuple(hd(Exprs)) of
+        true ->
+            window_clause2(Exprs, false);
+        false ->
+            if not Safe ->
+                [list_to_binary(Exprs)];
+            true ->
+                throw({error, {unsafe_expression, Exprs}})
+            end
+    end;
+
+window_clause({partition_by, ColNames}, Safe) ->
+    [<<"PARTITION BY ">>, make_list(ColNames, fun(Col) -> expr2(Col, Safe) end)];
+window_clause({order_by, _ColNames} = OrderBy, Safe) ->
+    [extra_clause(OrderBy, Safe)].
+
 extra_clause2(Exprs, Safe) ->
-    Res = [extra_clause(Expr,Safe) || Expr <- Exprs, Expr =/= undefined],
-    [Res].
+    generic_clause2(Exprs, Safe, fun extra_clause/2).
+
+window_clause2(Exprs, Safe) ->
+    generic_clause2(Exprs, Safe, fun window_clause/2).
+
+generic_clause2(Exprs, Safe, Fun) ->
+    Res = [Fun(Expr,Safe) || Expr <- Exprs, Expr =/= undefined],
+    [intersperse($\s, Res)].
 
 insert(Table, Params) when is_list(Params) ->
     Names = make_list(Params, fun({Name, _}) -> convert(Name) end),
@@ -358,7 +379,8 @@ update(Table, Props, Where, Safe) ->
     S2 = make_list(Props, fun({Field, Val}) ->
         [convert(Field), <<" = ">>, expr(Val, Safe)]
     end),
-    [<<"UPDATE ">>, S1, <<" SET ">>, S2, where(Where, Safe)].
+    S3 = [<<"UPDATE ">>, S1, <<" SET ">>, S2],
+    add_optional_where(S3, Where, Safe).
 
 delete(Table, Safe) ->
     delete(Table, undefined, undefined, undefined, Safe).
@@ -377,14 +399,11 @@ delete(Table, Using, WhereExpr, Extras, Safe) ->
     S3 = if Using =:= undefined -> S2;
         true -> [S2, <<" USING ">>, make_list(Using, fun convert/1)]
     end,
-    S4 = case where(WhereExpr, Safe) of
-        undefined -> S3;
-        WhereClause -> [S3, WhereClause]
-    end,
+    S4 = add_optional_where(S3, WhereExpr, Safe),
     if Extras =:= undefined ->
         S4;
     true ->
-        [S4, extra_clause(Extras, Safe)]
+        [S3, $\s, extra_clause(Extras, Safe)]
     end.
 
 convert(Val) when is_atom(Val)->
@@ -418,6 +437,17 @@ expr({select, _, _, _, _, _} = Subquery, Safe) ->
     [$(, sql2(Subquery, Safe), $)];
 expr({select, _, _, _, _, _, _} = Subquery, Safe) ->
     [$(, sql2(Subquery, Safe), $)];
+expr({over, Left, Right}, Safe) ->
+    expr({over, Left, undefined, Right}, Safe);
+expr({over, Left, Cond, Right}, Safe) ->
+    Window = [$(, window_clause(Right, Safe), $)],
+    case Cond of
+        undefined ->
+            [expr2(Left, Safe), <<" OVER ">>, Window];
+        _ ->
+            Where = where(Cond, Safe),
+            [expr2(Left, Safe), <<" FILTER ">>, $(, Where, $), <<" OVER ">>, Window]
+    end;
 expr({Val, Op, {select, _} = Subquery}, Safe) ->
     subquery(Val, Op, Subquery, Safe);
 expr({Val, Op, {select, _, _} = Subquery}, Safe) ->
@@ -523,3 +553,18 @@ quote([$\^Z | Rest], Acc) ->
     quote(Rest, [$Z, $\\ | Acc]);
 quote([C | Rest], Acc) ->
     quote(Rest, [C | Acc]).
+
+add_optional_where(Pre, WhereExpr, Safe) ->
+    case where(WhereExpr, Safe) of
+        undefined -> Pre;
+        "" -> Pre;
+        <<"">> -> Pre;
+        WhereClause -> [Pre, $\s, WhereClause]
+    end.
+
+intersperse(_, []) ->
+  [];
+intersperse(_, [X]) ->
+  [X];
+intersperse(Sep, [X, Y | Xs]) ->
+  [X, Sep, Y | intersperse(Sep, Xs)].

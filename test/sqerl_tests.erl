@@ -343,6 +343,19 @@ unsafe_test_() ->
 
             {<<"SELECT foo FROM (SELECT foo FROM bar) AS baz">>,
              ?_unsafe_test({select, [foo], {from, {{select, [foo], {from, bar}}, as, baz}}})
+            },
+
+            {<<"SELECT row_number() OVER (ORDER BY foo DESC), bar FROM baz">>,
+             ?_unsafe_test({select, [{over, {call, row_number, []}, {order_by, [{foo, desc}]}}, bar], {from, baz}})
+            },
+
+            {<<"SELECT row_number() OVER (PARTITION BY foo, bar ORDER BY foo DESC), bar FROM baz">>,
+             ?_unsafe_test({select, [{over, {call, row_number, []}, [{partition_by, [foo, bar]}, {order_by, {foo, desc}}]}, bar], {from, baz}})
+            },
+
+            {<<"SELECT rank() FILTER (WHERE foo >= 2) OVER (PARTITION BY bar) FROM baz">>,
+             ?_unsafe_test({select, [{over, {call, rank, []}, "foo >= 2", {partition_by, bar}}], {from, baz}})
             }
+
         ]
     }.
