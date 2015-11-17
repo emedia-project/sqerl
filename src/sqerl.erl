@@ -406,6 +406,18 @@ expr({call, FuncName, []}, _Safe) ->
     [convert(FuncName), <<"()">>];
 expr({call, FuncName, Params}, _Safe) ->
     [convert(FuncName), $(, make_list(Params, fun param/1), $)];
+expr({select, _} = Subquery, Safe) ->
+    [$(, sql2(Subquery, Safe), $) ];
+expr({select, _, _} = Subquery, Safe) ->
+    [$(, sql2(Subquery, Safe), $)];
+expr({select, _, _, _} = Subquery, Safe) ->
+    [$(, sql2(Subquery, Safe), $)];
+expr({select, _, _, _, _} = Subquery, Safe) ->
+    [$(, sql2(Subquery, Safe), $)];
+expr({select, _, _, _, _, _} = Subquery, Safe) ->
+    [$(, sql2(Subquery, Safe), $)];
+expr({select, _, _, _, _, _, _} = Subquery, Safe) ->
+    [$(, sql2(Subquery, Safe), $)];
 expr({Val, Op, {select, _} = Subquery}, Safe) ->
     subquery(Val, Op, Subquery, Safe);
 expr({Val, Op, {select, _, _} = Subquery}, Safe) ->
