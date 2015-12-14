@@ -566,5 +566,5 @@ intersperse(_, []) ->
   [];
 intersperse(_, [X]) ->
   [X];
-intersperse(Sep, [X, Y | Xs]) ->
-  [X, Sep, Y | intersperse(Sep, Xs)].
+intersperse(Sep, [X | Xs]) ->
+  [X, Sep | intersperse(Sep, Xs)].
