@@ -245,7 +245,12 @@ safe_test_() ->
             {<<"SELECT * FROM foo JOIN bar ON (foo.bar_id = bar.id) JOIN baz ON (bar.baz_id = baz.id)">>,
               ?_safe_test({select,'*',{from,{foo,[ {join,bar,{'foo.bar_id','=','bar.id'}},
                                                    {join,baz,{'bar.baz_id','=','baz.id'}} ]}}})
+            },
+
+            {<<"SELECT foo FROM bar GROUP BY foo ORDER BY foo DESC LIMIT 10">>,
+             ?_safe_test({select, [foo], {from, bar}, [{group_by, foo}, {order_by, {foo, desc}}, {limit, 10}]})
             }
+
         ]
     }.
 
@@ -355,7 +360,10 @@ unsafe_test_() ->
 
             {<<"SELECT rank() FILTER (WHERE foo >= 2) OVER (PARTITION BY bar) FROM baz">>,
              ?_unsafe_test({select, [{over, {call, rank, []}, "foo >= 2", {partition_by, bar}}], {from, baz}})
-            }
+            },
 
+            {<<"SELECT foo FROM bar GROUP BY foo ORDER BY foo DESC LIMIT 10">>,
+             ?_unsafe_test({select, [foo], {from, bar}, [{group_by, foo}, {order_by, {foo, desc}}, {limit, 10}]})
+            }
         ]
     }.
