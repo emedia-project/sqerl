@@ -1,0 +1,38 @@
+@doc
+<h1>Sqerl</h1>
+
+<p>
+Sqerl is a domain specific embedded language for expressing SQL statements in Erlang as well as a library for generating the literal equivalents of Sqerl expressions.
+</p>
+
+<p>
+Sqerl lets you describe SQL queries using a combination of Erlang lists, tuples, atoms and values in a way that resembles the structure of SQL statements. You can pass this structure to the <tt>sql/1</tt> or <tt>sql/2</tt> functions, which parse it and return an iolist (a tree of strings and/or binaries) or a single binary, either of which can be sent to database engine through a socket (usually via a database-specific driver).
+</p>
+
+<p>
+Sqerl supports a large subset of the SQL language implemented by some popular RDBMS's, including most common <tt>INSERT</tt>, <tt>UPDATE</tt>, <tt>DELETE</tt> and <tt>SELECT</tt> statements. Sqerl can generate complex queries including those with unions, nested statements and aggregate functions, but it does not currently attempt to cover every feature and extension of the SQL language.
+</p>
+
+<p>
+Sqerl's benefits are:
+
+<ul>
+<li>Easy dynamic generation of SQL queries from Erlang by combining native Erlang types rather than string fragments.</li>
+<li>Prevention of most, if not all, SQL injection attacks by assuring that all string values are properly escaped.</li>
+<li>Efficient generation of iolists as nested lists of binaries.</li>
+</ul>
+</p>
+
+<p>
+<i>Warning</i>: Sqerl allows you to write verbatim <tt>WHERE</tt> clauses as well as verbatim <tt>LIMIT</tt> and other trailing clauses, but using this feature is highly discouraged because it exposes you to SQL injection attacks.
+</p>
+
+<p>
+For usage examples, look at the file <tt>test/sqerl_tests.erl</tt>.
+</p>
+
+<h1>Acknowledgements</h1>
+
+<p>
+Almost entirely based on ErlyWeb's ErlSQL by Yariv Sadan.
+</p>

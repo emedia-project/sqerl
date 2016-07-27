@@ -1,23 +1,18 @@
-REBAR = ./rebar
+include bu.mk
 
-.PHONY: all compile test clean get-deps build-plt dialyze
+.PHONY: doc
 
 all: compile
 
 compile:
-	@$(REBAR) compile
+	$(verbose) $(REBAR) compile
 
 test: compile
-	@$(REBAR) eunit skip_deps=true
+	$(verbose) $(REBAR) eunit
 
-clean:
-	@$(REBAR) clean
+distclean:
+	$(verbose) $(RM_RF) deps _build rebar.lock
 
-get-deps:
-	@$(REBAR) get-deps
+doc:
+	$(verbose) $(REBAR) as doc edoc
 
-build-plt:
-	@$(REBAR) build-plt
-
-dialyze: compile
-	@$(REBAR) dialyze

@@ -36,5 +36,5 @@ Almost entirely based on ErlyWeb's ErlSQL by Yariv Sadan.
 
 
 <table width="100%" border="0" summary="list of modules">
-<tr><td><a href="https://github.com/emedia-project/kafe/blob/master/doc/sqerl.md" class="module">sqerl</a></td></tr></table>
+<tr><td><a href="sqerl.md" class="module">sqerl</a></td></tr></table>
 
